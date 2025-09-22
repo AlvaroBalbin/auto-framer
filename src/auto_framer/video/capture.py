@@ -23,5 +23,59 @@ class VideoCapture:
         self.index = index
         self.res_w, self.res_h = size
         self.fps = fps
+
+        self.cap: cv.VideoCapture | None = None
+
+    def open(self) -> None:
+        """actually opens webcam, checks backend, applys requested parameters to camera"""
+        if self.cap is not None: # dont open twice
+            return
+        
+        # get backend
+        backend = _default_camera_backend()
+
+        # opens backend with passed index and backend
+        self.cap = cv.VideoCapture(self.index, backend)
+
+        if not self.cap.isOpened():
+            self.cap.release()
+            # fall back onto CAP_ANY if previous backend did not work
+            self.cap = cv.VideoCapture(self.index, cv.CAP_ANY)
+        
+        # still fails then called SysError
+        if not self.cap.isOpened():
+            raise SystemError(f"could not open camera on index:{self.index}")
+        
+        self.cap.set(cv.CAP_PROP_FRAME_WIDTH, float(self.res_w))
+        self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, float(self.res_h))
+        self.cap.set(cv.CAP_PROP_FPS, float(self.fps))
+
+    def read(self):
+        if self.cap is None:
+            raise RuntimeError("videocapture not opened. call open() first")
+        retval, image = self.cap.read()
+        if not retval or image is None:
+            # error with camera connection
+            return False, None
+        
+        return True, image
+    
+    def actual_size(self) -> tuple[int,int]:
+        if self.cap is None:
+            return (0,0)
+        w = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH) or 0)
+        h = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT) or 0)
+        return (w,h)
+    
+    def release(self) -> None:
+        if self.cap is not None:
+            self.cap.release()
+            self.cap = None
+        return None
+
+        
+
+
+
         
 
