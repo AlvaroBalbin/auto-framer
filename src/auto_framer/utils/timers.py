@@ -16,11 +16,11 @@ class FpsCalculator:
     # collect time frames then place in a deque, afterwards get the avg of all fps frames(smoothing)
     def tick(self) -> float:
         now = time.perf_counter()
-        if self._lastest is not None:
+        if self._latest is not None:
             diff_time = now - self._latest
             if diff_time > 0:
                 self._times.append(1/diff_time)
                 self.fps = sum(self._times) / len(self._times)
-        self._lastest = now
+        self._latest = now
         return self.fps
     

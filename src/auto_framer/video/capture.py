@@ -53,12 +53,12 @@ class VideoCapture:
     def read(self):
         if self.cap is None:
             raise RuntimeError("videocapture not opened. call open() first")
-        retval, image = self.cap.read()
-        if not retval or image is None:
+        retval, frame = self.cap.read()
+        if not retval or frame is None:
             # error with camera connection
             return False, None
         
-        return True, image
+        return True, frame
     
     def actual_size(self) -> tuple[int,int]:
         if self.cap is None:

@@ -11,6 +11,7 @@ class Config:
     target_height: int = 720
     fps: int = 30 
     mirror: bool = True # flip horizontally - feels more natural
+    window_name: str = "Auto-Framer"
 
     # overlays
     show_fps: bool = True # fps counter
@@ -21,7 +22,7 @@ class Config:
     framing_tighness: float = 0.8 # how much space to keep around face
 
     # virtual camera
-    enable_virtual_camera: bool = True 
+    enable_virtual_camera: bool = False 
 
     # filters for smoothing
     alpha_for_ema: float = 0.2 # smoothing factor for exponential moving average

@@ -1,5 +1,6 @@
 from __future__ import annotations
-import cv2
+import cv2 as cv
+import numpy as np
 
 try:
     import pyvirtualcam
@@ -13,4 +14,36 @@ class Renderer:
     - it also gives the output into a virtual webcam, so it can 
     stream on zoom/meets/teams
     """
-    def __init__(self)
+    def __init__(self, width: int, height: int, fps: int = 30, pyvirtualcam: bool = False):
+        self.width = width
+        self.height = height
+        self.enable_virtual_camera = pyvirtualcam
+        self.fps = fps
+        self.vcam = None # initizaling data for future use
+
+    # two function that get called with context managers
+    def __enter__(self):
+        if self.enable_virtual_camera:
+            self.vcam = pyvirtualcam.Camera(width=self.width, height=self.height, fps=self.fps)
+            print(f"[Renderer] Virtual Camera Enabled: {self.vcam.device}")
+        else:
+            if not _HAS_VCAM:
+                print(f"[Renderer] Virtual Camera not available, disabling it")
+        return self # return the opencv wrapper to context manager if vcam dont work
+
+    def __exit__(self, exc_type, exc_value, traceback ):
+        if self.vcam:
+            self.vcam.close()
+    
+    def show(self, winname: str, mat: np.ndarray) -> None:
+        # display window 
+        cv.imshow(winname, mat)
+
+        # send to vcam
+        if self.vcam is not None:
+            image_rgb = cv.cvtColor(mat, cv.COLOR_BGR2RGB)
+            self.vcam.send(image_rgb)
+            self.vcam.sleep_until_next_frame()
+        
+
+

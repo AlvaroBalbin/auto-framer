@@ -1,0 +1,56 @@
+from __future__ import annotations
+import cv2 as cv
+from ..types import Bbox, Track, FrameInfo
+import numpy as np
+
+def draw_fps(frame: np.ndarray, info: FrameInfo):
+    """draw the fps on the top right corner"""
+    if info.frame_fps > 0:
+        cv.putText(
+            frame, # image
+            f"FPS: {info.frame_fps:.2f}", # text
+            (10,30), # positioning from top-left
+            cv.FONT_HERSHEY_SIMPLEX, # font
+            0.6, # font scale
+            (0,255,0), # color
+            1, # thickness(1 is the default)
+            cv.LINE_AA, # line type (anti-aliasing, makes it more aesthetic)
+            )
+    
+def draw_faces(frame: np.ndarray, tracks: list[Track]):
+    """get bbox coordinates, draw rectangle around the face, write track_id next to it"""
+    for t in tracks:
+        x, y, w, h = t.bbox.make_tuple()
+        cv.rectangle(frame, (x,y), (x+w,y+h), (255,0,0), 2, cv.LINE_AA) # make rectangle on the bbox
+        cv.putText(
+            frame, 
+            f"Track ID: {t.track_id}",
+            (x, max(0,y-8)), # 8 pixels above bbox but safety so it dont leave the image
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.5, # dont want the text too large
+            (255,0,0), # strong blue
+            1,
+            cv.LINE_AA, # smooth edges
+        )
+
+def draw_vad(frame: np.ndarray, speaking: bool, show: bool):
+    """display the vad overlay, dipslaying whether audio is detected or not"""
+    if not show:
+        return
+    text = "VAD: speaking" if speaking else "VAD: not speaking"
+    color = (0,255,0) if speaking else (200, 200, 200) # green when speaking else gray
+    cv.putText(
+        frame,
+        text,
+        (10,60),
+        cv.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        color,
+        2,
+        cv.LINE_AA,
+    )
+
+def draw_crop_box(frame: np.ndarray, crop: Bbox):
+    """shows current cropping region: box size of what you wanna focus on"""
+    x, y, w, h = crop.make_tuple() # crop is a passed Bbox object
+    cv.rectangle(frame, (x,y), (x+w,y+h), (100,100,100), 1, cv.LINE_AA)
