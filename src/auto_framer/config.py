@@ -12,20 +12,23 @@ class Config:
     fps: int = 30 
     mirror: bool = True # flip horizontally - feels more natural
     window_name: str = "Auto-Framer"
+    maximum_failures: int = 30 # number of failed frames before closing
 
     # overlays
     show_fps: bool = True # fps counter
     show_debug_tools: bool = False # extra debug information
     show_vad_overlay: bool = True # show voice activity detection overlay
+    show_bbox: bool = False
 
     # framing
-    framing_tighness: float = 0.8 # how much space to keep around face
+    framing_tightness: float = 0.8 # how much space to keep around face
+    focus_on_speaker: bool = False
 
     # virtual camera
     enable_virtual_camera: bool = False 
 
     # filters for smoothing
-    alpha_for_ema: float = 0.2 # smoothing factor for exponential moving average
+    alpha_for_ema: float = 0.25 # smoothing factor for exponential moving average
     hysteresis_time: float = 0.75 # seconds to wait before switching states
     
     # audio

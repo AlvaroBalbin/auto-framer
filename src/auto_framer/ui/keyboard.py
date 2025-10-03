@@ -11,6 +11,8 @@ class KeyStates:
     toggle_vcam: bool = False
     tighter: bool = False
     looser: bool = False
+    bbox_overlay: bool = False
+    focus_on_speaker: bool = False
 
 def KeyPolls(delay_ms: int = 1):
     key = cv.waitKey(delay_ms) & 0xFF # keep only ASCII bits
@@ -29,4 +31,8 @@ def KeyPolls(delay_ms: int = 1):
         state.tighter = True
     elif key == ord("l"):
         state.looser = True
+    elif key == ord("b"):
+        state.bbox_overlay = True
+    elif key == ord("f"):
+        state.focus_on_speaker = True
     return state
