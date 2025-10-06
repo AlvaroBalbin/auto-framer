@@ -1,6 +1,5 @@
 from __future__ import annotations
 from ..types import Bbox
-import math
 
 def _16x9to(w: int, h: int) -> tuple[int, int]:
     aspect = 16 / 9
@@ -8,14 +7,14 @@ def _16x9to(w: int, h: int) -> tuple[int, int]:
 
     if current_aspect > aspect:
         # too wide -> increase height
-        new_h = math.round(w / aspect)
+        new_h = int(round(w / aspect))
         return w, new_h
     else:
         # too tall -> increase width
-        new_w = math.round(h * aspect)
+        new_w = int(round(h * aspect))
         return new_w, h
     
-def compute_crop(target: Bbox | None, frame_w: int, frame_h: int, frame_tightness: float) -> Bbox:
+def compute_crop(target: Bbox | None, frame_w: int, frame_h: int, tightness: float) -> Bbox:
     """
     returns a Bbox of dimensions (x,y,w,h), which acts as a crop for our specific target
     tightness is the following 1 = very zoomed in, 0.5 = looser framing
@@ -30,8 +29,8 @@ def compute_crop(target: Bbox | None, frame_w: int, frame_h: int, frame_tightnes
         return Bbox(x, y, w, h)
     
     # set up our desired width and height following intensity of tightness
-    targw = max(1, int(frame_w * 1 / frame_tightness))
-    targh = max(1, int(frame_h * 1 / frame_tightness))
+    targw = max(1, int(target.w * (1 / tightness)))
+    targh = max(1, int(target.h * (1 / tightness)))
 
     # then force the shape into correct aspect ratio
     truew, trueh = _16x9to(targw, targh)

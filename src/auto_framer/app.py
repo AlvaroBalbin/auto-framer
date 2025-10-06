@@ -58,7 +58,7 @@ def main():
     # optional but it allow for more specific window settings rather than just cv.imshow()
     cv.namedWindow(cfg.window_name, cv.WINDOW_NORMAL)
 
-    # we get smoothed frames, initialize objects such as tracker and face detector to use in the loop
+    # we get smoothed frames object, initialize objects such as tracker and face detector to use in the loop
     smoother = EMASmoother(alpha=cfg.alpha_for_ema)
     tracker = Tracker()
     fd = FaceDetector()
@@ -83,18 +83,69 @@ def main():
             # ----------------------------------------------------------------------------
             # face detection and setting tracks
             boxes = fd.detect(frame) # returns list[Bbox] -> might be multiple if + faces are found
-            tracks = [Track(track_id=i+1, boxes=b) for i, b in enumerate(boxes)]
+            tracks = tracker.update(boxes)
+            
 
-            # display bouding boxes on the faces if you want, cant happen alongside focus on speaker function
-            if cfg.show_bbox and  not cfg.focus_on_speaker: overlays.draw_faces(frame, tracks)
+            # show bounding boxes -> what the program considers a face
+            if cfg.show_bbox:
+                overlays.draw_faces(frame, tracks)   # draw bbox on source frame
+
+            # TEMPORARY DEBUG
+            cv.putText(frame, f"focus={cfg.focus_on_speaker} faces={len(tracks)}",
+           (10, 90), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,255), 2, cv.LINE_AA)
+            
+            
 
             if cfg.focus_on_speaker:
-                target = None
                 if tracks:
-                    target = max((t.bbox for t in tracks), key=lambda b: b.w * b.h)
+                    
+                    target = max((t.bbox for t in tracks), key=lambda b: b.w * b.h) if tracks else None
+                    crop_box = compute_crop(target=target, 
+                                            frame_w=frame.shape[1], 
+                                            frame_h=frame.shape[0], 
+                                            tightness=cfg.framing_tightness)
+                    
+                    # after computing the crop then smooth it out so we it does not jitter
+                    crop_box = smoother.update(crop_box)
+
+                    # to prevent empty arrays from frame -> when bbox goes out of frame and EMA pushes box outside by few pixels
+                    H, W = frame.shape[:2] # CURRENT width and height
+                    x, y, w, h = crop_box.make_tuple()
+
+                    # convert to int to ensure right data type
+                    x = int(x)
+                    y = int(y)
+                    w = int(w)
+                    h = int(h)
+
+                    # now clamp to image bounds
+                    x = max(0, min(x, W-1))
+                    y = max(0, min(y, H-1))
+                    w = max(1,min(w, W-x))
+                    h = max(1, min(h, H-y))
+
+                    # TEMPORARY DEBUG
+                    cv.rectangle(frame, (x, y), (x+w, y+h), (0, 200, 255), 2, cv.LINE_AA)
+                    cv.putText(frame, f"crop {w}x{h}", (10, 120),
+                    cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,0), 2, cv.LINE_AA)
+
+                    # slicing and then resizing
+                    cropped = frame[y:y+h, x:x+w]
+                    crop_out = cv.resize(cropped, (cfg.target_width, cfg.target_height), interpolation=cv.INTER_LINEAR)
+
+                    # TEMPORARY DEBUG
+                    cv.putText(frame, f"crop {w}x{h}", (10, 120),
+                    cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,0), 2, cv.LINE_AA)
+
+                else:
+                    # reset smoothing since it has internal memory
+                    smoother.reset()
+                    # if the user wants to focus on speaker but no faces are found we will get an error without this fallback
+                    crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height) 
+
             else:
                 # center crop to 16:9 aspect ratio and resize: if speaker focus on speaker is not True
-                crop_out = crop_center_16x9(frame, cfg.input_width, cfg.input_height)
+                crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height)
 
 
 
