@@ -110,6 +110,65 @@ class MouthActivityEstimator:
             return Bbox(left_x, top_y, w, h)
         
         def update(self, frame_bgr: np.ndarray, tracks: list[Track]) -> Bbox:
+            """ sets activity to 0.0 
+            tracks MAR using the tracks"""
+
+            if not self.available or self._fm is None or not tracks:
+                for t in tracks:
+                    t.mouth_activity = 0.0
+                return
+
+            h, w = frame_bgr.shape[:2]
+            frame_rgb = cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB)
+            results = mp_face_mesh.process(frame_rgb)
+
+            if not results.multi_face_landmarks:
+                for t in tracks:
+                    t.mouth_activity = 0.0
+                return
+            
+            # converts landmarks to pixels coords for every face thats detected
+            faces_pixels: list[list[tuple[float, float]]] = []
+            faces_bbox: list[Bbox] = []
+            for landmarks in results.multi_face_landmarks:
+                # get all pixels not scaled but absolute values for all landmarks
+                pixels = [((landmarks.landmark[i].x * w), (landmarks.landmark[i].y * h)) for i in range(len(results.multi_face_landmarks))]
+                faces_pixels.append(pixels)
+                faces_bbox.append(self.landmarks_to_bbox)
+
+            # each landmark needs to go to a track
+            for t in tracks:
+                best_face = -69 # index of best matching face
+                best_iou = 0.0
+                for i, faceBbox in enumerate(faces_bbox):
+                    iou = _iou(t.bbox, faceBbox)
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_face = i
+
+                if best_face < 0 or best_iou < 0.05:
+                    # no good match
+                    t.mouth_activity = 0.0
+                    continue
+
+                mar = self.compute_mar(faces_pixels[best_face])
+
+                # now smooth the MAR and compute change in MAR(delta)
+                previous_mar = self._mar_state.get(t.track_id, 0.0)
+                ema_mar = previous_mar + self._alpha * (mar - previous_mar)
+                # delta is the movement in mouth
+                delta = abs(ema_mar - previous_mar)
+
+                # now get previous smoothed activity
+                previous_activity = self._activity.get(t.track_id, 0.0)
+                ema_act = previous_activity + self._alpha * (delta - previous_activity)
+                
+                # assign onto object values
+                self.mar_state[t.track_id] = ema_mar
+                self.activity[t.track_id] = ema_act
+
+                t.mouth_activity = float(ema_act)
+
 
 
 
