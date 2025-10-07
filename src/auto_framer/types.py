@@ -13,8 +13,8 @@ class Bbox:
         return(self.x, self.y, self.w, self.h)
     
     def center(self) -> tuple[int, int]:
-        center_x = (self.x + self.w)/2
-        center_y = (self.y + self.h)/2
+        center_x = self.x + (self.w/2)
+        center_y = self.y + (self.h/2)
         return center_x, center_y
         
 

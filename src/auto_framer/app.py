@@ -133,10 +133,6 @@ def main():
                     cropped = frame[y:y+h, x:x+w]
                     crop_out = cv.resize(cropped, (cfg.target_width, cfg.target_height), interpolation=cv.INTER_LINEAR)
 
-                    # TEMPORARY DEBUG
-                    cv.putText(frame, f"crop {w}x{h}", (10, 120),
-                    cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,0), 2, cv.LINE_AA)
-
                 else:
                     # reset smoothing since it has internal memory
                     smoother.reset()
@@ -147,10 +143,6 @@ def main():
                 # center crop to 16:9 aspect ratio and resize: if speaker focus on speaker is not True
                 crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height)
 
-
-
-                 
-            # --------------------------------------------------------------------------
 
             # overlays 
             fps = fps_counter.tick()
