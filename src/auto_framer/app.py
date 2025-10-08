@@ -14,6 +14,9 @@ from .logic.framing import compute_crop
 from .logic.smoothing import EMASmoother
 from .vision.tracker import Tracker
 from .vision.mediapipe_face import FaceDetector
+from .vision.mouth import MouthActivityEstimator
+from .audio.vad import VADStream
+from .logic.fusion import SelectSpeaker
 
 
 def crop_center_16x9(frame: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
@@ -63,9 +66,19 @@ def main():
     tracker = Tracker()
     fd = FaceDetector()
 
+    # now we set up appropriate objects for VAD, FaceMesh and the fusion setup to determine score
+    mouth = MouthActivityEstimator(alpha=0.3, max_num_faces=4)
+    # will default to auto device if None is passed (default in __init__ function)
+    vad = VADStream(sample_rate = 16000, frame_ms= 30, aggressiveness = 2, attack = 4, release = 10)
+    vad.start()
+    speaker = SelectSpeaker(stickiness=0.3, hold_frames=30)
+
+
     with Renderer(cfg.target_width, cfg.target_height, cfg.fps, cfg.enable_virtual_camera) as rend:
         frame_index = 0 # starting frame
         failed_frame_counter = 0 # counter for how many frames failed
+        speaker_id = None # initialize so that its not local later on -> use it in the HUD overlay
+        crop_box = None
         while True:
             retval, frame = cap.read()
             if not retval or frame is None:
@@ -80,27 +93,31 @@ def main():
 
             if cfg.mirror:
                 frame = cv.flip(frame, 1)
+
             # ----------------------------------------------------------------------------
             # face detection and setting tracks
             boxes = fd.detect(frame) # returns list[Bbox] -> might be multiple if + faces are found
             tracks = tracker.update(boxes)
-            
 
-            # show bounding boxes -> what the program considers a face
-            if cfg.show_bbox:
-                overlays.draw_faces(frame, tracks)   # draw bbox on source frame
-
-            # TEMPORARY DEBUG
-            cv.putText(frame, f"focus={cfg.focus_on_speaker} faces={len(tracks)}",
-           (10, 90), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,255), 2, cv.LINE_AA)
+            # TEMPORARY DEBUG used it before I created debug was very useful
+            # cv.putText(frame, f"focus={cfg.focus_on_speaker} faces={len(tracks)}",
+            # (10, 90), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,255), 2, cv.LINE_AA)
             
-            
+            # update mouth data
+            mouth.update(frame_bgr = frame, tracks = tracks)
 
             if cfg.focus_on_speaker:
                 if tracks:
+                    speaker_id = speaker.select(tracks, vad.state.activity)
+                    chosen_speaker = next((t for t in tracks if t.track_id == speaker_id), None)
+
+                    target_bbox = chosen_speaker.bbox if chosen_speaker is not None else None
+
+                    if chosen_speaker is None:
+                        # have this as a backup in case the chosen_speaker cannot be determined -> picks largest face
+                        chosen_speaker = max((t.bbox for t in tracks), key=lambda b: b.w * b.h) if tracks else None
                     
-                    target = max((t.bbox for t in tracks), key=lambda b: b.w * b.h) if tracks else None
-                    crop_box = compute_crop(target=target, 
+                    crop_box = compute_crop(target=target_bbox, 
                                             frame_w=frame.shape[1], 
                                             frame_h=frame.shape[0], 
                                             tightness=cfg.framing_tightness)
@@ -124,11 +141,6 @@ def main():
                     w = max(1,min(w, W-x))
                     h = max(1, min(h, H-y))
 
-                    # TEMPORARY DEBUG
-                    cv.rectangle(frame, (x, y), (x+w, y+h), (0, 200, 255), 2, cv.LINE_AA)
-                    cv.putText(frame, f"crop {w}x{h}", (10, 120),
-                    cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,0), 2, cv.LINE_AA)
-
                     # slicing and then resizing
                     cropped = frame[y:y+h, x:x+w]
                     crop_out = cv.resize(cropped, (cfg.target_width, cfg.target_height), interpolation=cv.INTER_LINEAR)
@@ -144,14 +156,32 @@ def main():
                 crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height)
 
 
-            # overlays 
-            fps = fps_counter.tick()
+            # overlays
+            overlay_frame = crop_out.copy()
+            fps = fps_counter.tick() # get what by using the output frame
             info = FrameInfo(frame_index=frame_index, frame_time=time.perf_counter(), frame_fps=fps)
             if cfg.show_fps:
-                overlays.draw_fps(crop_out, info)
+                overlays.draw_fps(overlay_frame, info)
+
+            # show bounding boxes -> what the program considers a face
+            if cfg.show_bbox and not cfg.focus_on_speaker:
+                overlays.draw_faces(overlay_frame, tracks)   # draw bbox on source frame
+
+             # display the debug hud -> gives extra info on variables like VAD activity
+            if cfg.show_debug_tools:
+                overlays.draw_hud(frame=overlay_frame,
+                                  info=info,
+                                  tracks=tracks,
+                                  active_id=speaker_id if cfg.focus_on_speaker else None,
+                                  vad_speaking=vad.state.activity,
+                                  tightness=cfg.framing_tightness,
+                                  ema_alpha=cfg.alpha_for_ema,
+                                  vcam_on=cfg.enable_virtual_camera,
+                                  hud_top_left = cfg.hud_top_left)
+
 
             
-            rend.show(cfg.window_name, crop_out) 
+            rend.show(cfg.window_name, overlay_frame) 
 
             # keyboard polls
             ks = KeyPolls(1) # 1 ms delay per poll
@@ -161,9 +191,12 @@ def main():
             if ks.focus_on_speaker: cfg.focus_on_speaker = not cfg.focus_on_speaker
             if ks.tighter: cfg.framing_tightness = min(0.98, cfg.framing_tightness + 0.05) # clamp so zooming isnt excessive
             if ks.looser: cfg.framing_tightness = max(0.02, cfg.framing_tightness - 0.05) 
+            if ks.toggle_debug_tools: cfg.show_debug_tools = not cfg.show_debug_tools
 
             frame_index += 1
 
+        vad.stop()
+        # mouth.close() not necessary anymore
         cap.release()
         cv.destroyAllWindows()
 

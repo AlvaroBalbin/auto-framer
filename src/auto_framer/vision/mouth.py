@@ -5,11 +5,11 @@ import cv2 as cv
 
 from ..types import Bbox, Track
 
-mp_face_mesh = mp.solutions.face_mesh
 
 try:
     import mediapipe as mp
     _HAS_MP = True
+    mp_face_mesh = mp.solutions.face_mesh
 except Exception:
     _HAS_MP = False
 
@@ -85,89 +85,99 @@ class MouthActivityEstimator:
         self._U = 0
         self._D = 17   
 
-        def compute_mar(self, mouth_pixels: list[tuple[int, int]]) -> float:
-            L = mouth_pixels[self._L]
-            R = mouth_pixels[self._R]
-            U = mouth_pixels[self._U]
-            D = mouth_pixels[self._D]
+    def compute_mar(self, mouth_pixels: list[tuple[int, int]]) -> float:
+        L = mouth_pixels[self._L]
+        R = mouth_pixels[self._R]
+        U = mouth_pixels[self._U]
+        D = mouth_pixels[self._D]
 
-            # horizontal distance over vertical distance
-            mar = float((R - L) / (D - U))
+        # horizontal distance over vertical distance
+        mar = float((R - L) / (D - U))
 
-            return mar
+        return mar
         
-        # to calculate iou we need to get the raw coordinates to bbox instead of 468 landmarks
-        def landmarks_to_bbox(self,  mouth_pixels: list[tuple[int, int]]) -> Bbox:
-            all_x = (x[0] for x in mouth_pixels)
-            all_y = (y[1] for y in mouth_pixels)
-
-            left_x, top_y = int(min(all_x)), int(min(all_y))
-            right_x, bottom_y = int(max(all_x)), int(max(all_x))
-
-            w = max(1, right_x - left_x)
-            h = max(1, bottom_y - top_y)
-
-            return Bbox(left_x, top_y, w, h)
+    # to calculate iou we need to get the raw coordinates to bbox instead of 468 landmarks
+    def landmarks_to_bbox(self,  mouth_pixels: list[tuple[int, int]]) -> Bbox:
+        if not mouth_pixels: # protect against empty input, had errors due to this :)
+            return
         
-        def update(self, frame_bgr: np.ndarray, tracks: list[Track]) -> Bbox:
-            """ sets activity to 0.0 
-            tracks MAR using the tracks"""
+        all_x = (x[0] for x in mouth_pixels)
+        all_y = (y[1] for y in mouth_pixels)
 
-            if not self.available or self._fm is None or not tracks:
-                for t in tracks:
-                    t.mouth_activity = 0.0
-                return
+        # i used a generator somewhere so i need ot turn into a list so i dont empty the generator out
+        # lazy solution but works
+        all_x = list(all_x)
+        all_y = list(all_y)
 
-            h, w = frame_bgr.shape[:2]
-            frame_rgb = cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB)
-            results = mp_face_mesh.process(frame_rgb)
+        left_x = int(min(all_x))
+        top_y = int(min(all_y))
+        right_x = int(max(all_x)) 
+        bottom_y = int(max(all_x))
 
-            if not results.multi_face_landmarks:
-                for t in tracks:
-                    t.mouth_activity = 0.0
-                return
-            
-            # converts landmarks to pixels coords for every face thats detected
-            faces_pixels: list[list[tuple[float, float]]] = []
-            faces_bbox: list[Bbox] = []
-            for landmarks in results.multi_face_landmarks:
-                # get all pixels not scaled but absolute values for all landmarks
-                pixels = [((landmarks.landmark[i].x * w), (landmarks.landmark[i].y * h)) for i in range(len(results.multi_face_landmarks))]
-                faces_pixels.append(pixels)
-                faces_bbox.append(self.landmarks_to_bbox)
+        w = max(1, right_x - left_x)
+        h = max(1, bottom_y - top_y)
 
-            # each landmark needs to go to a track
+        return Bbox(left_x, top_y, w, h)
+        
+    def update(self, frame_bgr: np.ndarray, tracks: list[Track]) -> Bbox:
+        """ sets activity to 0.0 
+        tracks MAR using the tracks"""
+
+        if not self.available or self._fm is None or not tracks:
             for t in tracks:
-                best_face = -69 # index of best matching face
-                best_iou = 0.0
-                for i, faceBbox in enumerate(faces_bbox):
-                    iou = _iou(t.bbox, faceBbox)
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_face = i
+                t.mouth_activity = 0.0
+            return
 
-                if best_face < 0 or best_iou < 0.05:
-                    # no good match
-                    t.mouth_activity = 0.0
-                    continue
+        h, w = frame_bgr.shape[:2]
+        frame_rgb = cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB)
+        results = self._fm.process(frame_rgb)
 
-                mar = self.compute_mar(faces_pixels[best_face])
+        if not results.multi_face_landmarks:
+            for t in tracks:
+                t.mouth_activity = 0.0
+            return
+            
+        # converts landmarks to pixels coords for every face thats detected
+        faces_pixels: list[list[tuple[float, float]]] = []
+        faces_bbox: list[Bbox] = []
+        for landmarks in results.multi_face_landmarks:
+            # get all pixels not scaled but absolute values for all landmarks
+            pixels = [((landmarks.landmark[i].x * w), (landmarks.landmark[i].y * h)) for i in range(len(results.multi_face_landmarks))]
+            faces_pixels.append(pixels)
+            faces_bbox.append(self.landmarks_to_bbox(pixels))
 
-                # now smooth the MAR and compute change in MAR(delta)
-                previous_mar = self._mar_state.get(t.track_id, 0.0)
-                ema_mar = previous_mar + self._alpha * (mar - previous_mar)
-                # delta is the movement in mouth
-                delta = abs(ema_mar - previous_mar)
+        # each landmark needs to go to a track
+        for t in tracks:
+            best_face = -69 # index of best matching face
+            best_iou = 0.0
+            for i, faceBbox in enumerate(faces_bbox):
+                iou = _iou(t.bbox, faceBbox)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_face = i
 
-                # now get previous smoothed activity
-                previous_activity = self._activity.get(t.track_id, 0.0)
-                ema_act = previous_activity + self._alpha * (delta - previous_activity)
+            if best_face < 0 or best_iou < 0.05:
+                # no good match
+                t.mouth_activity = 0.0
+                continue
+
+            mar = self.compute_mar(faces_pixels[best_face])
+
+            # now smooth the MAR and compute change in MAR(delta)
+            previous_mar = self._mar_state.get(t.track_id, 0.0)
+            ema_mar = previous_mar + self._alpha * (mar - previous_mar)
+            # delta is the movement in mouth
+            delta = abs(ema_mar - previous_mar)
+
+            # now get previous smoothed activity
+            previous_activity = self._activity.get(t.track_id, 0.0)
+            ema_act = previous_activity + self._alpha * (delta - previous_activity)
                 
-                # assign onto object values
-                self.mar_state[t.track_id] = ema_mar
-                self.activity[t.track_id] = ema_act
+            # assign onto object values
+            self.mar_state[t.track_id] = ema_mar
+            self.activity[t.track_id] = ema_act
 
-                t.mouth_activity = float(ema_act)
+            t.mouth_activity = float(ema_act)
 
 
 

@@ -46,45 +46,45 @@ class VADStream:
         self._s_count = 0 # the amount of frames speech was counted
         self._q_count = 0 # quite frames count
 
-        def start(self):
-            if not _HAS_AUDIO:
-                return
-            # how many samples per audio chunk
-            blocksize = int(frame_ms * sample_rate / 1000)
+    def start(self):
+        if not _HAS_AUDIO:
+            return
+        # how many samples per audio chunk
+        blocksize = int(self.frame_ms * self.sample_rate / 1000)
 
-            tracking_object = self._stream.InputStream(
-                channels = 1,
-                dtype = "int16",
-                sample_rate = self.sample_rate,
-                blockSize = None, # dont know yet 
-                device = self.device,
-                callback = callback,
-            )
+        tracking_object = sd.InputStream(
+            channels = 1,
+            dtype = "int16",
+            sample_rate = self.sample_rate,
+            blockSize = None, # dont know yet 
+            device = self.device,
+            callback = self.callback,
+        )
 
-        def stop(self):
-            if self._stream:
-                self._stream.stop()
-                self._stream = None # clear object after stopping
+    def stop(self):
+        if self._stream:
+            self._stream.stop()
+            self._stream = None # clear object after stopping
 
-        # called every audio chunk depending on frame_ms (buffer size)
-        def callback(indata: np.ndarray, frames: int, time, status):
-            if not _HAS_AUDIO:
-                return
-            # since webrtc needs audio bits convert to bytes()
-            buffer = bytes(indata)
-            try:
-                speech = self._vad.is_speech(buffer, self.sample_rate)
-            except Exception:
-                speech = False
+    # called every audio chunk depending on frame_ms (buffer size)
+    def callback(self, indata: np.ndarray, frames: int, time, status):
+        if not _HAS_AUDIO:
+            return
+        # since webrtc needs audio bits convert to bytes()
+        buffer = bytes(indata)
+        try:
+            speech = self._vad.is_speech(buffer, self.sample_rate)
+        except Exception:
+            speech = False
 
-            if speech:
-                self._s_count += 1
-                self._q_count = 0
-                if not self.state.activity and self._s_count >= self.attack:
-                    self.state.activity = True
-            else:
-                self._q_count += 1
-                self._s_count = 0
-                if self.state.activity and self._q_count >= self.release:
-                    self.state.activity = False
+        if speech:
+            self._s_count += 1
+            self._q_count = 0
+            if not self.state.activity and self._s_count >= self.attack:
+                self.state.activity = True
+        else:
+            self._q_count += 1
+            self._s_count = 0
+            if self.state.activity and self._q_count >= self.release:
+                self.state.activity = False
 

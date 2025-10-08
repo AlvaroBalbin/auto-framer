@@ -54,3 +54,35 @@ def draw_crop_box(frame: np.ndarray, crop: Bbox):
     """shows current cropping region: box size of what you wanna focus on"""
     x, y, w, h = crop.make_tuple() # crop is a passed Bbox object
     cv.rectangle(frame, (x,y), (x+w,y+h), (100,100,100), 1, cv.LINE_AA)
+
+def draw_hud(
+        frame: np.ndarray,
+        info: FrameInfo,
+        tracks: list[Track],
+        active_id: int, # relates to current speaker track in use
+        vad_speaking: bool,
+        tightness: float,
+        ema_alpha: float,
+        vcam_on: bool,
+        hud_top_left: tuple[int, int] = (10,60), # starting position of the hud
+):
+    x, y = hud_top_left
+    color = (255, 0, 0) # blue
+    height_line = 20 # will later seperate each line 
+
+    lines = [
+        f"fps: {info.frame_fps:.1f}",
+        f"no. of tracks {len(tracks) if tracks else "-"}",
+        f"current active id {active_id if active_id else "-"}",
+        f"vad speaking? = {vad_speaking}",
+        f"tightness: {tightness:.2f}",
+        f"ema alpha: {ema_alpha:.2f}",
+        f"is vcam on? {"True" if vcam_on else "False"}"
+    ]
+
+    for i, text in enumerate(lines):
+        cv.putText(frame, lines[i], (x, y + (i * height_line)), cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv.LINE_AA,)
+
+    # draw a confirmation dot -> letting user know quickly whether VAD is on or not
+    vad_color = (0, 255, 0) if vad_speaking else (0, 0, 255)
+    cv.circle(frame, (x + 225, 114), 5, vad_color, 1) # green color 

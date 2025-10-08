@@ -17,11 +17,11 @@ class Config:
     # overlays
     show_fps: bool = True # fps counter
     show_debug_tools: bool = False # extra debug information
-    show_vad_overlay: bool = True # show voice activity detection overlay
     show_bbox: bool = False
+    hud_top_left: tuple[int, int] = (10,60)
 
     # framing
-    framing_tightness: float = 0.60 # how much space to keep around face
+    framing_tightness: float = 0.50 # how much space to keep around face
     focus_on_speaker: bool = False
 
     # virtual camera

@@ -21,8 +21,6 @@ def KeyPolls(delay_ms: int = 1):
         state.quit = True
     elif key == ord("m"):
         state.toggle_mirror = True
-    elif key == ord("v"):
-        state.toggle_vad_overlay = True
     elif key == ord("d"):
         state.toggle_debug_tools = True
     elif key == ord("c"):
