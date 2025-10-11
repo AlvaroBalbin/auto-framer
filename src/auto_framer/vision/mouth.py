@@ -30,19 +30,19 @@ def _iou(a: Bbox, b: Bbox) -> float:
 
     # calculate height and widht of interesection, variables are quite wordy but its clearer imo
     # max prevents errors arising from no overlap at all
-    intersection_w = max(0, overlap_x1 - overlap_x2)
-    intersection_h = max(0, overlap_y1 - overlap_y2)
+    intersection_w = max(0, overlap_x2 - overlap_x1)
+    intersection_h = max(0, overlap_y2 - overlap_y1)
 
     intersection_area = intersection_w * intersection_h
 
-    if intersection_area == 0:
+    if intersection_area <= 0:
         return 0.0
     
     # calculates total union area
-    union_area = a.w * a.h + b.w * b.h
+    union_area = a.w * a.h + b.w * b.h - intersection_area
 
     # intersection over union area, and max() safeguards against division by zero
-    iou = int(intersection_area / max(1, union_area))
+    iou = intersection_area / max(1, union_area)
 
     return iou
 
@@ -69,7 +69,7 @@ class MouthActivityEstimator:
         if self.available:
 
             self._fm = mp_face_mesh.FaceMesh(
-                static_image_mode=True,
+                static_image_mode=False,
                 max_num_faces=max_num_faces,
                 refine_landmarks=False, # helps give far more detailed landmarks, not necessary here
                 min_detection_confidence=0.5,
@@ -86,18 +86,23 @@ class MouthActivityEstimator:
         self._D = 17   
 
     def compute_mar(self, mouth_pixels: list[tuple[int, int]]) -> float:
+        # point we need
+        need = (self._L, self._R, self._U, self._D)
+        if len(mouth_pixels) <= max(need): # if highest pixel isnt there just return base activity
+            return 0.0 
+
         L = mouth_pixels[self._L]
         R = mouth_pixels[self._R]
         U = mouth_pixels[self._U]
         D = mouth_pixels[self._D]
 
         # horizontal distance over vertical distance
-        mar = float((R - L) / (D - U))
+        mar = _distance(U, D) / (_distance(L, R))
 
         return mar
         
     # to calculate iou we need to get the raw coordinates to bbox instead of 468 landmarks
-    def landmarks_to_bbox(self,  mouth_pixels: list[tuple[int, int]]) -> Bbox:
+    def landmarks_to_bbox(self,  mouth_pixels: list[tuple[int, int]]) -> Bbox | None:
         if not mouth_pixels: # protect against empty input, had errors due to this :)
             return
         
@@ -112,14 +117,14 @@ class MouthActivityEstimator:
         left_x = int(min(all_x))
         top_y = int(min(all_y))
         right_x = int(max(all_x)) 
-        bottom_y = int(max(all_x))
+        bottom_y = int(max(all_y))
 
         w = max(1, right_x - left_x)
         h = max(1, bottom_y - top_y)
 
         return Bbox(left_x, top_y, w, h)
         
-    def update(self, frame_bgr: np.ndarray, tracks: list[Track]) -> Bbox:
+    def update(self, frame_bgr: np.ndarray, tracks: list[Track]) -> None:
         """ sets activity to 0.0 
         tracks MAR using the tracks"""
 
@@ -132,6 +137,8 @@ class MouthActivityEstimator:
         frame_rgb = cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB)
         results = self._fm.process(frame_rgb)
 
+        print("[mouth.py] landmarks detected:", bool(results.multi_face_landmarks))
+
         if not results.multi_face_landmarks:
             for t in tracks:
                 t.mouth_activity = 0.0
@@ -141,8 +148,11 @@ class MouthActivityEstimator:
         faces_pixels: list[list[tuple[float, float]]] = []
         faces_bbox: list[Bbox] = []
         for landmarks in results.multi_face_landmarks:
+            # guard against faces with small landmarks
+            if not landmarks.landmark or len(landmarks.landmark) < 300: # we need 468 but if its transient then it might be less
+                continue
             # get all pixels not scaled but absolute values for all landmarks
-            pixels = [((landmarks.landmark[i].x * w), (landmarks.landmark[i].y * h)) for i in range(len(results.multi_face_landmarks))]
+            pixels = [((landmarks.landmark[i].x * w), (landmarks.landmark[i].y * h)) for i in range(len(landmarks.landmark))]
             faces_pixels.append(pixels)
             faces_bbox.append(self.landmarks_to_bbox(pixels))
 
@@ -174,8 +184,8 @@ class MouthActivityEstimator:
             ema_act = previous_activity + self._alpha * (delta - previous_activity)
                 
             # assign onto object values
-            self.mar_state[t.track_id] = ema_mar
-            self.activity[t.track_id] = ema_act
+            self._mar_state[t.track_id] = ema_mar
+            self._activity[t.track_id] = ema_act
 
             t.mouth_activity = float(ema_act)
 

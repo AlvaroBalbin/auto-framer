@@ -23,12 +23,12 @@ class VADStream:
     """
     # attack and release are how many frames it takes to release from hysteresis
     def __init__(self, 
-                sample_rate: int = 16000,
+                sample_rate: int = 48000,
                 frame_ms: int = 30, 
                 aggressiveness: int = 2, 
                 attack: int = 4, 
                 release: int = 10, 
-                device: int | None = None, 
+                device: any = None, 
                 ):
         
         self.sample_rate = sample_rate
@@ -52,14 +52,16 @@ class VADStream:
         # how many samples per audio chunk
         blocksize = int(self.frame_ms * self.sample_rate / 1000)
 
-        tracking_object = sd.InputStream(
+        self._stream = sd.InputStream(
             channels = 1,
             dtype = "int16",
-            sample_rate = self.sample_rate,
-            blockSize = None, # dont know yet 
+            samplerate = self.sample_rate,
+            blocksize = blocksize,
             device = self.device,
             callback = self.callback,
         )
+
+        self._stream.start()
 
     def stop(self):
         if self._stream:

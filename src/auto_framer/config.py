@@ -25,7 +25,7 @@ class Config:
     focus_on_speaker: bool = False
 
     # virtual camera
-    enable_virtual_camera: bool = False 
+    enable_virtual_camera: bool = True
 
     # filters for smoothing
     alpha_for_ema: float = 0.25 # smoothing factor for exponential moving average

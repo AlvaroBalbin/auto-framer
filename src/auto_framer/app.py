@@ -48,7 +48,6 @@ def crop_center_16x9(frame: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
     return cv.resize(crop, (out_w, out_h), interpolation=cv.INTER_LINEAR)
 
 def main():
-    # all parameters for configuration object come from config.py
     cfg = CONFIG_DEFAULT
 
     # call personalized wrapper - not actual videocapture function from OpenCV
@@ -69,7 +68,8 @@ def main():
     # now we set up appropriate objects for VAD, FaceMesh and the fusion setup to determine score
     mouth = MouthActivityEstimator(alpha=0.3, max_num_faces=4)
     # will default to auto device if None is passed (default in __init__ function)
-    vad = VADStream(sample_rate = 16000, frame_ms= 30, aggressiveness = 2, attack = 4, release = 10)
+    DEVICE_INDEX = 9 # I used device 9 because windows did not like default other possible ones for windows are 11, 12
+    vad = VADStream(sample_rate = 48000, frame_ms= 30, aggressiveness = 2, attack = 4, release = 10, device=DEVICE_INDEX)
     vad.start()
     speaker = SelectSpeaker(stickiness=0.3, hold_frames=30)
 
@@ -99,6 +99,8 @@ def main():
             boxes = fd.detect(frame) # returns list[Bbox] -> might be multiple if + faces are found
             tracks = tracker.update(boxes)
 
+            vcam_on = rend.is_vcam_on()
+
             # TEMPORARY DEBUG used it before I created debug was very useful
             # cv.putText(frame, f"focus={cfg.focus_on_speaker} faces={len(tracks)}",
             # (10, 90), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,255), 2, cv.LINE_AA)
@@ -106,16 +108,23 @@ def main():
             # update mouth data
             mouth.update(frame_bgr = frame, tracks = tracks)
 
-            if cfg.focus_on_speaker:
-                if tracks:
-                    speaker_id = speaker.select(tracks, vad.state.activity)
+            if cfg.focus_on_speaker and tracks:
+                    # get VAD once 
+                    vad_active = getattr(vad.state, "activity", False)
+                    speaker_id = speaker.select(tracks, vad_active)
+
+                    active_ma = 0.0
                     chosen_speaker = next((t for t in tracks if t.track_id == speaker_id), None)
-
-                    target_bbox = chosen_speaker.bbox if chosen_speaker is not None else None
-
+            
                     if chosen_speaker is None:
                         # have this as a backup in case the chosen_speaker cannot be determined -> picks largest face
-                        chosen_speaker = max((t.bbox for t in tracks), key=lambda b: b.w * b.h) if tracks else None
+                        chosen_speaker = max(tracks, key=lambda t: t.bbox.w * t.bbox.h) if tracks else None
+
+                    active_ma = float(chosen_speaker.mouth_activity)
+                    target_bbox = chosen_speaker.bbox # no need to safeguard against None already done above
+
+                    cv.putText(overlay_frame, f"mouth activity (active): {active_ma:.2f}",
+                                (20, 300), cv.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,0), 1, cv.LINE_AA)
                     
                     crop_box = compute_crop(target=target_bbox, 
                                             frame_w=frame.shape[1], 
@@ -144,17 +153,14 @@ def main():
                     # slicing and then resizing
                     cropped = frame[y:y+h, x:x+w]
                     crop_out = cv.resize(cropped, (cfg.target_width, cfg.target_height), interpolation=cv.INTER_LINEAR)
-
-                else:
-                    # reset smoothing since it has internal memory
-                    smoother.reset()
-                    # if the user wants to focus on speaker but no faces are found we will get an error without this fallback
-                    crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height) 
-
+            elif cfg.focus_on_speaker and not tracks:
+                # reset smoothing since it has internal memory
+                smoother.reset()
+                # center crop to 16:9 aspect ratio and resize: if speaker focus on speaker is not True
+                crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height)
             else:
                 # center crop to 16:9 aspect ratio and resize: if speaker focus on speaker is not True
                 crop_out = crop_center_16x9(frame, cfg.target_width, cfg.target_height)
-
 
             # overlays
             overlay_frame = crop_out.copy()
@@ -167,17 +173,34 @@ def main():
             if cfg.show_bbox and not cfg.focus_on_speaker:
                 overlays.draw_faces(overlay_frame, tracks)   # draw bbox on source frame
 
+            # get all the values that will be passed into debug HUD
+            vad_activity = getattr(vad.state, "activity", False) # we didnt safeguard it in overlays
+            vad_running = bool(getattr(vad, "_stream", None)) # bool in place in case it returns object
+            vad_s_count = getattr(vad, "_s_count", None)
+            vad_q_count = getattr(vad, "_q_count", None)
+
+            if tracks and speaker_id is not None:
+                active_track = next((t for t in tracks if t.track_id == speaker_id), None)
+                mouth_activity = active_track.mouth_activity if active_track else 0.0
+            else:
+                mouth_activity = 0.0
+
+
              # display the debug hud -> gives extra info on variables like VAD activity
             if cfg.show_debug_tools:
                 overlays.draw_hud(frame=overlay_frame,
                                   info=info,
                                   tracks=tracks,
                                   active_id=speaker_id if cfg.focus_on_speaker else None,
-                                  vad_speaking=vad.state.activity,
+                                  vad_speaking=vad_activity,
                                   tightness=cfg.framing_tightness,
                                   ema_alpha=cfg.alpha_for_ema,
-                                  vcam_on=cfg.enable_virtual_camera,
-                                  hud_top_left = cfg.hud_top_left)
+                                  hud_top_left = cfg.hud_top_left,
+                                  vad_running = vad_running, 
+                                  vad_s_count = vad_s_count,     
+                                  vad_q_count = vad_q_count,
+                                  mouth_activity = mouth_activity,
+                                  vcam_on = vcam_on)
 
 
             
@@ -192,6 +215,7 @@ def main():
             if ks.tighter: cfg.framing_tightness = min(0.98, cfg.framing_tightness + 0.05) # clamp so zooming isnt excessive
             if ks.looser: cfg.framing_tightness = max(0.02, cfg.framing_tightness - 0.05) 
             if ks.toggle_debug_tools: cfg.show_debug_tools = not cfg.show_debug_tools
+            if ks.toggle_vcam: cfg.enable_virtual_camera = not cfg.enable_virtual_camera
 
             frame_index += 1
 
@@ -202,12 +226,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-    
-
-

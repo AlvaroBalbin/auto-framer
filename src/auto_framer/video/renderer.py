@@ -1,6 +1,7 @@
 from __future__ import annotations
 import cv2 as cv
 import numpy as np
+import pyvirtualcam
 
 try:
     import pyvirtualcam
@@ -14,12 +15,16 @@ class Renderer:
     - it also gives the output into a virtual webcam, so it can 
     stream on zoom/meets/teams
     """
-    def __init__(self, width: int, height: int, fps: int = 30, pyvirtualcam: bool = False):
+    def __init__(self, width: int, height: int, fps: int = 30, enable_virtualcam: bool = False):
         self.width = width
         self.height = height
         self.enable_virtual_camera = pyvirtualcam
         self.fps = fps
-        self.vcam = None # initizaling data for future use
+        if enable_virtualcam and _HAS_VCAM:
+            self.vcam = pyvirtualcam.Camera(width=width, height=height, fps=fps)
+            print(f"[renderer], the virtual cam has successfully been started")
+        else:
+            print(f"[renderer] failed to start virtual camera")
 
     # two function that get called with context managers
     def __enter__(self):
@@ -31,9 +36,12 @@ class Renderer:
                 print(f"[Renderer] Virtual Camera not available, disabling it")
         return self # return the opencv wrapper to context manager if vcam dont work
 
-    def __exit__(self, exc_type, exc_value, traceback ):
+    def __exit__(self, exc_type, exc_value, traceback):
         if self.vcam:
             self.vcam.close()
+
+    def is_vcam_on(self) -> bool:
+        return self.vcam is not None
     
     def show(self, winname: str, mat: np.ndarray) -> None:
         # display window 
@@ -44,6 +52,6 @@ class Renderer:
             image_rgb = cv.cvtColor(mat, cv.COLOR_BGR2RGB)
             self.vcam.send(image_rgb)
             self.vcam.sleep_until_next_frame()
-        
+
 
 

@@ -59,29 +59,54 @@ def draw_hud(
         frame: np.ndarray,
         info: FrameInfo,
         tracks: list[Track],
-        active_id: int, # relates to current speaker track in use
+        active_id: int | None, # relates to current speaker track in use
         vad_speaking: bool,
         tightness: float,
         ema_alpha: float,
         vcam_on: bool,
         hud_top_left: tuple[int, int] = (10,60), # starting position of the hud
+        vad_running: bool = None,  # check if vad stream has started (major debug)
+        vad_s_count: int = None,     
+        vad_q_count: int = None,   
+        mouth_activity: int = None,
 ):
     x, y = hud_top_left
-    color = (255, 0, 0) # blue
+    color = (255, 0, 0) # blue(BGR)
     height_line = 20 # will later seperate each line 
+
+    vcam_str = "ON" if vcam_on else "OFF"
+    vad_running = "-" if None else ("speaking" if vad_running else "stopped")
+    no_tracks_str = len(tracks) if tracks else "-"
+    active_id_str = active_id if active_id else "-"
+    
+    # get current score for only active tracks
+    if active_id and tracks:
+        active_track = next((t for t in tracks if active_id == t.track_id), None)
+        if active_track is not None:
+            score = getattr(active_track, "score", None)
+            score_str = f"{score:.2f}" if score is not None else "-"
+        else:
+            score_str = "-"
+    else:
+        score_str = "-"
 
     lines = [
         f"fps: {info.frame_fps:.1f}",
-        f"no. of tracks {len(tracks) if tracks else "-"}",
-        f"current active id {active_id if active_id else "-"}",
+        f"no. of tracks {no_tracks_str}",
+        f"current active id {active_id_str}",
         f"vad speaking? = {vad_speaking}",
+        f"is vad stream on? {vad_running}",
         f"tightness: {tightness:.2f}",
         f"ema alpha: {ema_alpha:.2f}",
-        f"is vcam on? {"True" if vcam_on else "False"}"
+        f"is vcam on? {vcam_str}",
+        f"vad s count: {vad_s_count}",
+        f"vad q count:  {vad_q_count}",
+        f"score: {score_str}",
+        f"mouth activity: {mouth_activity}",
     ]
 
     for i, text in enumerate(lines):
-        cv.putText(frame, lines[i], (x, y + (i * height_line)), cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv.LINE_AA,)
+        cv.putText(frame, text, (x, y + (i * height_line)), cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv.LINE_AA,)
 
     # draw a confirmation dot -> letting user know quickly whether VAD is on or not
     vad_color = (0, 255, 0) if vad_speaking else (0, 0, 255)
