@@ -86,7 +86,6 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 ## Comments on the code
 
-```markdown
 - To check that all the versions were correct I used strict version specifiers using the ones that were released when I was making the project.
 
 - Code runs on Python 3.12 and not 3.13, that’s only because certain Mediapipe and other packages use wheels and prebuilt wheels do not exist on Windows for Python 3.13 yet.
@@ -187,8 +186,6 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 - Mediapipe Face Mesh is a pre-trained model from Google’s Mediapipe library. It helps detect human faces in an image or a video frame and returns 468 3D landmarks on the face.
 
 - I used EMA smoothing for the crops so that it would “ease” into the new position without abruptly jumping. To make it slower, decrease the EMA alpha, and to make it move into a new position faster, use a larger EMA alpha.
-
----
 
 ## Documentation I used
 
