@@ -1,7 +1,7 @@
 opencv-python==4.10.0.84
-mediapipe==0.10.21
+mediapipe>=0.10.10,<0.11
 numpy==1.26.4
 sounddevice==0.5.1
-webrtcvad==2.0.10
+webrtcvad-wheels==2.0.14
 pyvirtualcam==0.14.0
 

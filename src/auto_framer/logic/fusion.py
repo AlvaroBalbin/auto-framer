@@ -24,7 +24,7 @@ class SelectSpeaker:
         
         for t in tracks:
             # if vad is silent then lower scores
-            base = t.mouth_activity * 13
+            base = t.mouth_activity * 15
             t.score = base if vad_activity else 0.4 * base # reduce score half everytime
 
         # add hysteresis to current track
