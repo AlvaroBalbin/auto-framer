@@ -53,6 +53,10 @@ python -c "import sounddevice as sd; print(sd.query_devices())"
 
 -----------------------------------------------------------------------------------------------------
 
+## Using the OBS Virtual Camera
+Once the app is running and you toggle the virtual camera (`c` key), a virtual video feed named **OBS Virtual Camera** becomes available system-wide.
+You can select it in any video app (Zoom, Google Meet, Discord, etc.) by choosing **OBS Virtual Camera** as your webcam source.
+
 ## Keyboard controls
 
 During runtime you can toggle features via keyboard polling (cv.waitKey):
@@ -73,6 +77,13 @@ During runtime you can toggle features via keyboard polling (cv.waitKey):
 
 A real-time Python system that keeps your camera centered on whoever is speaking. It uses mediapipe for face landmarks, OpenCV for tracking, and webrtcvad for voice activity, then fuses both signals to pick the active speaker. The crop moves with an EMA smoother so it looks natural. Output goes to an OpenCV preview and an OBS virtual camera so you can use it in Zoom or Meet or Skype(not with us anymore).
 
+## Video Demonstration
+
+[![Auto Framer Demonstration](https://img.youtube.com/vi/6LIKZzyblYA/0.jpg)](https://youtu.be/6LIKZzyblYA)  
+*Auto-framing around the active speaker using face and voice detection.*
+
+[![Virtual Camera Demonstration](https://img.youtube.com/vi/WEpCl1NrE94/0.jpg)](https://youtu.be/WEpCl1NrE94)  
+*Output streamed to an OBS virtual camera for use in video apps.*
 
 #### Repo workflow diagram
 
