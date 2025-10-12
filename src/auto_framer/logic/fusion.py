@@ -7,7 +7,7 @@ class SelectSpeaker:
     speaker based VAD would be better if each user has seperate microphones
     """
 
-    def __init__(self, stickiness: float = 0.08, hold_frames: int = 6):
+    def __init__(self, stickiness: float = 0.03, hold_frames: int = 6):
         """stickiness is the value that assigns a value to how long a current speaker has been talking for
         prevents ping pong, and hold_frames even if score of Tracks changes a minimum amount of time 
         needs to pass before the speaker is switched """
@@ -24,7 +24,7 @@ class SelectSpeaker:
         
         for t in tracks:
             # if vad is silent then lower scores
-            base = t.mouth_activity * 15
+            base = t.mouth_activity * 60
             t.score = base if vad_activity else 0.4 * base # reduce score half everytime
 
         # add hysteresis to current track
