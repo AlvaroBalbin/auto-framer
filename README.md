@@ -111,27 +111,27 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 - When calculating the built-in OpenCV .get() to find frames, the cv::CAP_PROP_POS_FRAMES will give you the frames but it might be inaccurate because reading / writing properties involves many layers. Some unexpected results might happen along this chain:
   VideoCapture -> API Backend -> Operating System -> Device Driver -> Device Hardware  
-  The returned value might be different from what is really used by the device or it could be encoded using device dependent rules (e.g. steps or percentage). Effective behaviour depends on device driver and API backend therefore we make our own FPS counter.
+  The returned value might be different from what is really used by the device or it could be encoded using device dependent rules (e.g. steps or percentage). Effective behaviour depends on device driver and API backend thereforeI make our own FPS counter.
 
 - time.perf_counter() is the highest precision timer available.
 
 - if diff_time > 0 realistically this is always going to be the case, but it just guards against division by zero and is overall protection.
 
-- A good explanation why we are doing object tracking and not object detection: A good tracking algorithm will use all information it has about the object up to that point while a detection algorithm always starts from scratch. Therefore, while designing an efficient system usually an object detection is run on every nth frame while the tracking algorithm is employed in the n-1 frames in between. Don’t start from scratch every time, it’s just inefficient.
+- A good explanation why I are doing object tracking and not object detection: A good tracking algorithm will use all information it has about the object up to that point while a detection algorithm always starts from scratch. Therefore, while designing an efficient system usually an object detection is run on every nth frame while the tracking algorithm is employed in the n-1 frames in between. Don’t start from scratch every time, it’s just inefficient.
 
 - A frame is a NumPy array representing an image; with many of these NumPy arrays you get a video.
 
 - Maybe change WINDOW_NORMAL to WINDOW_AUTOSIZE if facing aspect ratio problems.
 
-- Only using BlazeFace for bounding boxes and face detection (add trackers on the face) but then we will use FaceMesh for facial landmarks and its mouth landmarks to determine who is speaking. Using BlazeFace because it is lightweight and quick.
+- Only using BlazeFace for bounding boxes and face detection (add trackers on the face) but then I will use FaceMesh for facial landmarks and its mouth landmarks to determine who is speaking. Using BlazeFace because it is lightweight and quick.
 
 - np.multiply returns floats so you have to cast them to int before using BBox.
 
 - Because of certain edge cases or rounding errors, you might end up with h or w being negative so you gotta skip these degenerate boxes entirely.
 
-- When using int() we truncate towards zero so we have to use round() beforehand, because if not we might collapse tiny boxes like 0.9 instead of keeping them.
+- When using int() I truncate towards zero so I have to use round() beforehand, because if not we might collapse tiny boxes like 0.9 instead of keeping them.
 
-- The holes to mice documentation https://www.geeksforgeeks.org/dsa/assign-mice-holes/ helps understand the current greedy algorithm issue we are facing when trying to determine how to assign track_id to each BBox.
+- The holes to mice documentation https://www.geeksforgeeks.org/dsa/assign-mice-holes/ helps understand the current greedy algorithm issue I are facing when trying to determine how to assign track_id to each BBox.
 
 - max_distance is pixel dependent, so it can be scale-sensitive.
 
@@ -141,7 +141,7 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 - I was using cv.WINDOW_AUTOSIZE but it kept snapping as I dragged and let go, it would snap into the new frame, so I changed it for cv.WINDOW_NORMAL.
 
-- Since VAD only takes mono 16-bit PCM audio when we are using sounddevice, we need to use InputStream parameters channels=1 and dtype=int16.
+- Since VAD only takes mono 16-bit PCM audio when I are using sounddevice, I need to use InputStream parameters channels=1 and dtype=int16.
 
 - In audio processing, a buffer is a temporary area of memory that stores audio data to be processed or played back. The buffer size is the duration or number of audio samples the computer uses at once for processing.
 
@@ -157,7 +157,7 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 - In many of my type hints I use the | instead of or, that is because the | operator is used for type hints but also because you want to ensure multiple conditions are truthy, not just the first one.
 
-- In smoothing.py we use floats because even though we cannot travel half a pixel we want to keep the fractional math still in play. The background movement is smooth and there are no weird jumps. It makes the camera more robust.
+- In smoothing.py I use floats because even though we cannot travel half a pixel we want to keep the fractional math still in play. The background movement is smooth and there are no weird jumps. It makes the camera more robust.
 
 - To explain tightness: basically 1 is super tight (crop = target size) while 0.5 would be crop = 2x the target size, and 0 would be just the whole screen.
 
@@ -165,7 +165,7 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 - Why use sets? Because we can do membership checks in O(1) time complexity in track_id in unmatched_tracks for example. It has fast removal and no duplicates which makes all of them unique, that is important in this project.
 
-- In this project we used greedy nearest neighbour because it was fast and efficient and we didn’t have more than ~10 faces so the assignments would never truly fail. However, if necessary, Hungarian assignment would try all possible pairings and find the minimum total distance across all matches, but this would be slower O(n³) though optimal. That was outside the scope of the project.
+- In this project I used greedy nearest neighbour because it was fast and efficient and I didn’t have more than ~10 faces so the assignments would never truly fail. However, if necessary, Hungarian assignment would try all possible pairings and find the minimum total distance across all matches, but this would be slower O(n³) though optimal. That was outside the scope of the project.
 
 - Greedy nearest neighbour: for each new detection find the closest existing track by distance and match it if it’s close enough. Do this one detection at a time without trying to find the best global combination. It’s called greedy because it does not reconsider matches after a detection.
 
@@ -176,13 +176,13 @@ In practice the camera follows the active speaker smoothly without ping-ponging.
 
 - Mediapipe face detection wrapper: given a BGR image (OpenCV frame), then changes to RGB, runs Mediapipe detector, converts each relative bounding box to absolute pixel coordinates, returns a list of BBox objects clamped to image size. Also .close() isn’t necessary in new Mediapipe updates.
 
-- We used time.perf_counter() to track time because it’s monotonic so it only goes into the future and it has extremely high precision, the most you’ll find. Also it’s also relative so it is useful in loops.
+- I used time.perf_counter() to track time because it’s monotonic so it only goes into the future and it has extremely high precision, the most you’ll find. Also it’s also relative so it is useful in loops.
 
 - cv.namedWindow using imshow lets you display your image, but I decided to include this to allow users to have more flexibility with their window types, and you can change this in config.py.
 
 - There are many different forms of interpolation. I checked all out and used linear in the end, but the documentation can help show you more. Shoutout to Computerphile on YouTube.
 
-- We measured mouth movement using change in mouth aspect ratio instead of just mouth opening ratio because MOR would give you raw values which could change from person to person, while MAR would give you normalized values and we could easily calculate the change of it per frame.
+- I measured mouth movement using change in mouth aspect ratio instead of just mouth opening ratio because MOR would give you raw values which could change from person to person, while MAR would give you normalized values and I could easily calculate the change of it per frame.
 
 - For bounding boxes the measurement used was x, y, w, h not x, y, x, y so you get the top-left corner then the width and height instead of the top-left and bottom-right corner coordinates. IMO it is easier to visualize and work with when programming.
 
